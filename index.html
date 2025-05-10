@@ -35,6 +35,9 @@
 <body>
     <div class="container">
         <h2>マルハン蒲田駅東店 ピボットテーブル</h2>
+        <select id="hallSelector">
+            <option value="マルハン蒲田駅東店" selected>マルハン蒲田駅東店</option>
+        </select>
         <div id="output"></div>
     </div>
 
@@ -45,21 +48,19 @@
 
     <script>
         const output = document.getElementById('output');
+        const hallSelector = document.getElementById('hallSelector');
         const fileName = `./差枚数/マルハン蒲田駅東店.csv`;
 
         let originalData = [];
-
-        // === ファイルパスの確認 ===
-        alert(`[DEBUG] 試行中のパス: ${fileName}`);
 
         // === CSVの読み込み ===
         fetch(fileName)
             .then(response => {
                 if (!response.ok) {
-                    alert("[ERROR] ファイルが見つかりませんでした。パスを確認してください。");
+                    console.error("[ERROR] ファイルが見つかりませんでした。パスを確認してください。");
                     throw new Error("ファイルが見つかりません");
                 }
-                alert("[DEBUG] CSVの取得成功");
+                console.log("[DEBUG] CSVの取得成功");
                 return response.text();
             })
             .then(csvData => {
@@ -68,18 +69,18 @@
                     skipEmptyLines: true,
                     complete: function(results) {
                         originalData = results.data;
-                        alert("[DEBUG] CSVパース成功\n" + JSON.stringify(originalData.slice(0, 3), null, 2));
+                        console.log("[DEBUG] CSVパース成功", originalData.slice(0, 3));
 
                         if (originalData.length === 0) {
-                            alert("[ERROR] データが空です。CSVの内容を確認してください。");
+                            console.error("[ERROR] データが空です。CSVの内容を確認してください。");
                         } else {
-                            alert("[DEBUG] 1行目の内容: " + JSON.stringify(originalData[0]));
+                            console.log("[DEBUG] 1行目の内容:", originalData[0]);
                             renderTable(originalData);
                         }
                     }
                 });
             })
-            .catch(error => alert("[ERROR] CSVファイルの読み込みに失敗しました: " + error));
+            .catch(error => console.error("[ERROR] CSVファイルの読み込みに失敗しました: " + error));
 
         // === ピボットテーブル描画 ===
         function renderTable(data) {
