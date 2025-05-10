@@ -70,6 +70,7 @@
         const fileName = `./差枚数/マルハン蒲田駅東店.csv`;
 
         let originalData = [];
+        let totalDiff = {};
 
         // === CSVの読み込み ===
         fetch(fileName, { cache: 'no-cache' })
@@ -95,11 +96,10 @@
                         originalData.sort((a, b) => new Date(b["日付"]) - new Date(a["日付"]));
 
                         // === 機種名の合計差枚数でソート ===
-                        const totalDiff = {};
+                        totalDiff = {};
                         originalData.forEach(row => {
                             totalDiff[row["機種名"]] = (totalDiff[row["機種名"]] || 0) + row["差枚数"];
                         });
-                        originalData.sort((a, b) => totalDiff[b["機種名"]] - totalDiff[a["機種名"]]);
 
                         // === ピボットテーブルの描画 ===
                         renderTable(originalData);
