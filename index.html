@@ -29,6 +29,13 @@
         #output {
             margin-top: 20px;
         }
+
+        #dateSelector {
+            margin-bottom: 20px;
+            width: 100%;
+            max-height: 200px;
+            overflow-y: auto;
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.css">
 </head>
@@ -38,6 +45,10 @@
         <select id="hallSelector">
             <option value="マルハン蒲田駅東店" selected>マルハン蒲田駅東店</option>
         </select>
+
+        <select id="dateSelector" multiple></select>
+        <button onclick="applyFilter()">適用</button>
+
         <div id="output"></div>
     </div>
 
@@ -49,6 +60,7 @@
     <script>
         const output = document.getElementById('output');
         const hallSelector = document.getElementById('hallSelector');
+        const dateSelector = document.getElementById('dateSelector');
         const fileName = `./差枚数/マルハン蒲田駅東店.csv`;
 
         let originalData = [];
@@ -74,13 +86,26 @@
                         if (originalData.length === 0) {
                             console.error("[ERROR] データが空です。CSVの内容を確認してください。");
                         } else {
-                            console.log("[DEBUG] 1行目の内容:", originalData[0]);
+                            const uniqueDates = [...new Set(originalData.map(row => row["日付"]))];
+                            uniqueDates.forEach(date => {
+                                const option = document.createElement('option');
+                                option.value = date;
+                                option.text = date;
+                                dateSelector.appendChild(option);
+                            });
                             renderTable(originalData);
                         }
                     }
                 });
             })
             .catch(error => console.error("[ERROR] CSVファイルの読み込みに失敗しました: " + error));
+
+        // === フィルターの適用 ===
+        function applyFilter() {
+            const selectedDates = Array.from(dateSelector.selectedOptions).map(option => option.value);
+            const filteredData = originalData.filter(row => selectedDates.includes(row["日付"]));
+            renderTable(filteredData);
+        }
 
         // === ピボットテーブル描画 ===
         function renderTable(data) {
