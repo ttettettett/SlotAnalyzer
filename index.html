@@ -94,6 +94,7 @@
                         originalData.sort((a, b) => new Date(b["日付"]) - new Date(a["日付"]));
 
                         const uniqueDates = [...new Set(originalData.map(row => row["日付"]))];
+                        uniqueDates.reverse(); // 最新日付を左側に表示
                         dateSelector.innerHTML = "";
                         uniqueDates.forEach(date => {
                             if (date) {
@@ -122,12 +123,12 @@
             $(output).pivotUI(data, {
                 rows: ["機種名"],
                 cols: ["日付"],
-                aggregatorName: "Average",
+                aggregatorName: "Sum",
                 vals: ["差枚数"],
                 rendererOptions: {
                     heatmap: {
                         colorScaleGenerator: values => {
-                            return d3.scale.threshold()
+                            return d3.scaleThreshold()
                                 .domain([1000, 2000])
                                 .range(["#ffffcc", "#ffeda0", "#f03b20"]);
                         }
