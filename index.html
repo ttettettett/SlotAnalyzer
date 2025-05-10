@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ホールデータ比較</title>
+    <title>マルハン蒲田駅東店 ピボットテーブル</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -91,18 +91,17 @@
                             return row;
                         });
 
-                        // 日付の並びを新しい順に変更
+                        // === 日付の並びを新しい順に修正 ===
                         originalData.sort((a, b) => new Date(b["日付"]) - new Date(a["日付"]));
 
-                        // 機種名の並びを差枚数の合計でソート
+                        // === 機種名の合計差枚数でソート ===
                         const totalDiff = {};
                         originalData.forEach(row => {
                             totalDiff[row["機種名"]] = (totalDiff[row["機種名"]] || 0) + row["差枚数"];
                         });
-
                         originalData.sort((a, b) => totalDiff[b["機種名"]] - totalDiff[a["機種名"]]);
 
-                        // ピボットテーブルの描画
+                        // === ピボットテーブルの描画 ===
                         renderTable(originalData);
                     }
                 });
@@ -125,6 +124,9 @@
                                 .range(["#ffffcc", "#ffeda0", "#f03b20"]);
                         }
                     }
+                },
+                sorters: {
+                    "機種名": (a, b) => totalDiff[b] - totalDiff[a]
                 }
             });
         }
