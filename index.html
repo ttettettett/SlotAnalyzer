@@ -13,12 +13,13 @@
         }
 
         .container {
-            max-width: 900px;
+            max-width: 100%;
             margin: 0 auto;
             padding: 20px;
             background-color: #ffffff;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow-x: auto;
         }
 
         h2 {
@@ -35,6 +36,10 @@
             width: 100%;
             max-height: 200px;
             overflow-y: auto;
+        }
+
+        button {
+            margin-bottom: 20px;
         }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.css">
@@ -81,24 +86,24 @@
                     header: true,
                     skipEmptyLines: true,
                     complete: function(results) {
-                        originalData = results.data;
-                        console.log("[DEBUG] CSVパース成功", originalData.slice(0, 3));
+                        originalData = results.data.map(row => {
+                            row["差枚数"] = Math.round(parseFloat(row["差枚数"]));
+                            return row;
+                        });
 
-                        if (originalData.length === 0) {
-                            console.error("[ERROR] データが空です。CSVの内容を確認してください。");
-                        } else {
-                            const uniqueDates = [...new Set(originalData.map(row => row["日付"]))];
-                            dateSelector.innerHTML = "";
-                            uniqueDates.forEach(date => {
-                                if (date) {
-                                    const option = document.createElement('option');
-                                    option.value = date;
-                                    option.text = date;
-                                    dateSelector.appendChild(option);
-                                }
-                            });
-                            renderTable(originalData);
-                        }
+                        originalData.sort((a, b) => new Date(b["日付"]) - new Date(a["日付"]));
+
+                        const uniqueDates = [...new Set(originalData.map(row => row["日付"]))];
+                        dateSelector.innerHTML = "";
+                        uniqueDates.forEach(date => {
+                            if (date) {
+                                const option = document.createElement('option');
+                                option.value = date;
+                                option.text = date;
+                                dateSelector.appendChild(option);
+                            }
+                        });
+                        renderTable(originalData);
                     }
                 });
             })
@@ -115,11 +120,26 @@
         function renderTable(data) {
             output.innerHTML = "";
             $(output).pivotUI(data, {
-                rows: ["日付"],
-                cols: ["機種名"],
+                rows: ["機種名"],
+                cols: ["日付"],
                 aggregatorName: "Average",
                 vals: ["差枚数"],
-                rendererName: "Heatmap"
+                rendererOptions: {
+                    heatmap: {
+                        colorScaleGenerator: values => {
+                            return d3.scale.threshold()
+                                .domain([1000, 2000])
+                                .range(["#ffffcc", "#ffeda0", "#f03b20"]);
+                        }
+                    }
+                },
+                sorters: {
+                    "機種名": (a, b) => {
+                        const totalA = data.filter(row => row["機種名"] === a).reduce((sum, row) => sum + row["差枚数"], 0);
+                        const totalB = data.filter(row => row["機種名"] === b).reduce((sum, row) => sum + row["差枚数"], 0);
+                        return totalB - totalA;
+                    }
+                }
             });
         }
     </script>
