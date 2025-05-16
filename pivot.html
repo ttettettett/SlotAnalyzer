@@ -13,13 +13,10 @@
         .table-container { overflow: auto; max-height: 80vh; position: relative; }
         table { border-collapse: collapse; width: max-content; }
         th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: center; background: #fff; white-space: nowrap; box-sizing: border-box; }
-        th:nth-child(n+4) { position: sticky; top: 0; background-color: #f0f0f0; z-index: 3; }
-        th:nth-child(1) { position: sticky; top: 0; left: 0; background-color: #f0f0f0; z-index: 5; width:50px; }
-        th:nth-child(2) { position: sticky; top: 0; left: 50px; background-color: #f0f0f0; z-index: 5; width:80px; }
-        th:nth-child(3) { position: sticky; top: 0; left: 130px; background-color: #f0f0f0; z-index: 5; width:60px; }
-        td:nth-child(1) { position: sticky; left: 0; z-index: 4; width:50px; }
-        td:nth-child(2) { position: sticky; left: 50px; z-index: 4; width:80px; }
-        td:nth-child(3) { position: sticky; left: 130px; z-index:4; width:60px; }
+        /* Sticky header */
+        th { position: sticky; top: 0; background-color: #f0f0f0; z-index: 3; }
+        /* Sticky first col */
+        th:nth-child(1), td:nth-child(1) { position: sticky; left: 0; z-index: 4; width:60px; background: #f0f0f0; }
     </style>
 </head>
 <body>
@@ -63,8 +60,7 @@
         }
 
         fileInput.addEventListener('change', e => {
-            const file = e.target.files[0];
-            if (!file) return;
+            const file = e.target.files[0]; if (!file) return;
             const reader = new FileReader();
             reader.onload = evt => {
                 const data = new Uint8Array(evt.target.result);
@@ -72,10 +68,15 @@
                 const sheet = wb.SheetNames[0];
                 originalData = XLSX.utils.sheet_to_json(wb.Sheets[sheet]);
                 if (!originalData.length) { alert('データがありません'); return; }
+                originalData.forEach(r => {
+                    r._rawDate = r['日付'];
+                    r._displayDate = formatDate(r['日付']);
+                });
                 const stores = [...new Set(originalData.map(r=>r['店舗名']))];
-                const dates = [...new Set(originalData.map(r=>r['日付']))].sort((a,b)=>new Date(b)-new Date(a));
+                const rawDates = [...new Set(originalData.map(r=>r._rawDate))]
+                    .sort((a,b)=>new Date(b)-new Date(a));
                 storeSelect.innerHTML = stores.map(s=>`<option>${s}</option>`).join('');
-                dateSelect.innerHTML = dates.map(d=>`<option value="${d}">${formatDate(d)}</option>`).join('');
+                dateSelect.innerHTML = rawDates.map(d=>`<option value="${d}">${formatDate(d)}</option>`).join('');
                 controls.style.display = 'block';
             };
             reader.readAsArrayBuffer(file);
@@ -85,89 +86,95 @@
             const store = storeSelect.value;
             const typeKey = typeSelect.value;
             const dates = Array.from(dateSelect.selectedOptions).map(o=>o.value);
-            const filtered = originalData.filter(r=>r['店舗名']===store && dates.includes(r['日付']));
+            const filtered = originalData.filter(r=>r['店舗名']===store && dates.includes(r._rawDate));
 
             let rows = [];
             if (typeKey === '台番号') {
                 const keys = [...new Set(filtered.map(r=>r['台番号']))];
-                rows = keys.map(key => ({ key, values: {}, machine: '', avg: 0 }));
+                rows = keys.map(key => ({ key, machine: '', values: {}, avg: 0 }));
                 rows.forEach(row => {
                     const recs = filtered.filter(r=>r['台番号']===row.key);
-                    row.machine = recs[0] ? recs[0]['機種名'] : '';
-                    let total = 0;
+                    row.machine = recs[0]?.['機種名'] || '';
+                    let total=0;
                     dates.forEach(d => {
-                        const sum = recs.filter(r=>r['日付']===d).reduce((s,r)=>s+(r['差枚数']||0),0);
-                        row.values[d] = sum;
-                        total += sum;
+                        const sum = recs.filter(r=>r._rawDate===d)
+                            .reduce((s,r)=>s+(r['差枚数']||0),0);
+                        row.values[d]=sum; total+=sum;
                     });
-                    row.avg = dates.length ? Math.round(total / dates.length) : 0;
+                    row.avg = dates.length?Math.round(total/dates.length):0;
                 });
             } else {
+                const datesCount = dates.length;
                 const keys = [...new Set(filtered.map(r=>r['機種名']))];
                 rows = keys.map(key => {
-                    const recs = filtered.filter(r=>r['機種名']===key);
-                    const count = recs.length;
-                    const sumAll = recs.reduce((s,r)=>s+(r['差枚数']||0),0);
-                    const avgAll = count ? Math.round(sumAll/count) : 0;
+                    const recsAll = filtered.filter(r=>r['機種名']===key);
+                    const dateAvgs = dates.map(d=>{
+                        const recs = recsAll.filter(r=>r._rawDate===d);
+                        return recs.length? recs.reduce((s,r)=>s+(r['差枚数']||0),0)/recs.length : 0;
+                    });
+                    const avgAll = datesCount?Math.round(dateAvgs.reduce((s,a)=>s+a,0)/datesCount):0;
+                    const latestDate = dates[0];
+                    const count = recsAll.filter(r=>r._rawDate===latestDate).length;
                     return { key, count, avgAll };
                 });
                 rows.sort((a,b)=>b.avgAll - a.avgAll);
             }
 
-            let html = '<table><tr>';
-            if (typeKey==='台番号') html += '<th>台番号</th><th>機種名</th><th>平均</th>'; else html += '<th>機種名</th><th>台数</th><th>平均</th>';
-            html += dates.map(d=>`<th>${formatDate(d)}</th>`).join('') + '</tr>';
+            let html='<table><tr>';
+            if(typeKey==='台番号') html+='<th>台</th><th>機種名</th><th>平均</th>';
+            else html+='<th>機種名</th><th>台数</th><th>平均</th>';
+            html+=dates.map(d=>`<th>${formatDate(d)}</th>`).join('')+'</tr>';
 
-            rows.forEach(row => {
-                html += '<tr>';
-                if (typeKey==='台番号') {
-                    let styleAvg = '';
-                    const avg = row.avg;
-                    if (avg>0&&avg<=1000) styleAvg='background:#ffffcc';
-                    else if (avg>=1001&&avg<=2000) styleAvg='background:orange';
-                    else if (avg>=2001&&avg<=3000) styleAvg='background:red';
-                    else if (avg>=3001) styleAvg='background:purple';
-                    html += `<td>${row.key}</td><td>${formatMachineName(row.machine)}</td><td${styleAvg?` style="${styleAvg}"`:``}>${avg}</td>`;
+            rows.forEach(row=>{
+                html+='<tr>';
+                if(typeKey==='台番号'){
+                    const avg=row.avg;
+                    let styleAvg='';
+                    if(avg>0&&avg<=1000)styleAvg='background:#ffffcc';
+                    else if(avg>=1001&&avg<=2000)styleAvg='background:orange';
+                    else if(avg>=2001&&avg<=3000)styleAvg='background:red';
+                    else if(avg>=3001)styleAvg='background:purple';
+                    html+=`<td>${row.key}</td><td>${formatMachineName(row.machine)}</td><td${styleAvg?` style="${styleAvg}"`:``}>${avg}</td>`;
                     dates.forEach(d=>{
-                        const sum = row.values[d] || 0;
+                        const sum=row.values[d]||0;
                         let style='';
-                        if(sum>0&&sum<=1000) style='background:#ffffcc';
-                        else if(sum>=1001&&sum<=2000) style='background:orange';
-                        else if(sum>=2001&&sum<=3000) style='background:red';
-                        else if(sum>=3001) style='background:purple';
-                        const displaySum = (sum === 0 ? '0' : sum);
-                        html += `<td${style?` style="${style}"`:``}>${displaySum}</td>`;
+                        if(sum>0&&sum<=1000)style='background:#ffffcc';
+                        else if(sum>=1001&&sum<=2000)style='background:orange';
+                        else if(sum>=2001&&sum<=3000)style='background:red';
+                        else if(sum>=3001)style='background:purple';
+                        html+=`<td${style?` style="${style}"`:``}>${sum||0}</td>`;
                     });
                 } else {
-                    html += `<td>${formatMachineName(row.key)}</td><td>${row.count}</td><td>${row.avgAll}</td>`;
+                    const avg=row.avgAll;
+                    let styleAvg='';
+                    if(avg>0&&avg<=1000)styleAvg='background:#ffffcc';
+                    else if(avg>=1001&&avg<=2000)styleAvg='background:orange';
+                    else if(avg>=2001&&avg<=3000)styleAvg='background:red';
+                    else if(avg>=3001)styleAvg='background:purple';
+                    html+=`<td>${formatMachineName(row.key)}</td><td>${row.count}</td><td${styleAvg?` style="${styleAvg}"`:``}>${avg}</td>`;
                     dates.forEach(d=>{
-                        const recs = filtered.filter(r=>r['機種名']===row.key && r['日付']===d);
-                        const avg = recs.length ? Math.round(recs.reduce((s,r)=>s+(r['差枚数']||0),0)/recs.length) : 0;
+                        const recs=filtered.filter(r=>r['機種名']===row.key&&r._rawDate===d);
+                        const val=recs.length?Math.round(recs.reduce((s,r)=>s+(r['差枚数']||0),0)/recs.length):0;
                         let style='';
-                        if(avg>0&&avg<=1000) style='background:#ffffcc';
-                        else if(avg>=1001&&avg<=2000) style='background:orange';
-                        else if(avg>=2001&&avg<=3000) style='background:red';
-                        else if(avg>=3001) style='background:purple';
-                        const displayAvg = (avg === 0 ? '0' : avg);
-                        html += `<td${style?` style="${style}"`:``}>${displayAvg}</td>`;
+                        if(val>0&&val<=1000)style='background:#ffffcc';
+                        else if(val>=1001&&val<=2000)style='background:orange';
+                        else if(val>=2001&&val<=3000)style='background:red';
+                        else if(val>=3001)style='background:purple';
+                        html+=`<td${style?` style="${style}"`:``}>${val||0}</td>`;
                     });
                 }
-                html += '</tr>';
+                html+='</tr>';
             });
-            html += '</table>';
-            tableContainer.innerHTML = `<div class="table-container">${html}</div>`;
-            const tableElem = tableContainer.querySelector('table');
-            const tableRows = tableElem.querySelectorAll('tr');
-            tableRows.forEach((tr, rowIndex) => {
-                const cells = tr.children;
-                for (let i = 0; i < 3; i++) {
-                    const cell = cells[i];
-                    const left = cell.offsetLeft;
-                    cell.style.position = 'sticky';
-                    cell.style.left = left + 'px';
-                    cell.style.zIndex = rowIndex === 0 ? 5 : 4;
-                    cell.style.backgroundColor = rowIndex === 0 ? '#f0f0f0' : '#fff';
-                }
+            html+='</table>';
+            tableContainer.innerHTML=`<div class="table-container">${html}</div>`;
+            const tbl=tableContainer.querySelector('table');
+            tbl.querySelectorAll('tr').forEach((tr,i)=>{
+                [...tr.children].slice(0,1).forEach(cell=>{
+                    const l=cell.offsetLeft;
+                    cell.style.position='sticky';cell.style.left=l+'px';
+                    cell.style.zIndex=i===0?5:4;
+                    cell.style.backgroundColor=i===0?'#f0f0f0':'#fff';
+                });
             });
         });
     </script>
