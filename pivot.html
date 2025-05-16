@@ -55,6 +55,12 @@
             const days = ['日','月','火','水','木','金','土'];
             return `${mm}/${dd}(${days[date.getDay()]})`;
         }
+        function formatMachineName(name) {
+            const t = name ? name.substring(0,10) : '';
+            const first = t.substring(0,5);
+            const second = t.length > 5 ? t.substring(5) : '';
+            return second ? `${first}<br>${second}` : first;
+        }
 
         fileInput.addEventListener('change', e => {
             const file = e.target.files[0];
@@ -121,7 +127,7 @@
                     else if (avg>=1001&&avg<=2000) styleAvg='background:orange';
                     else if (avg>=2001&&avg<=3000) styleAvg='background:red';
                     else if (avg>=3001) styleAvg='background:purple';
-                    html += `<td>${row.key}</td><td>${row.machine}</td><td${styleAvg?` style="${styleAvg}"`:``}>${avg}</td>`;
+                    html += `<td>${row.key}</td><td>${formatMachineName(row.machine)}</td><td${styleAvg?` style="${styleAvg}"`:``}>${avg}</td>`;
                     dates.forEach(d=>{
                         const sum = row.values[d] || 0;
                         let style='';
@@ -133,7 +139,7 @@
                         html += `<td${style?` style="${style}"`:``}>${displaySum}</td>`;
                     });
                 } else {
-                    html += `<td>${row.key}</td><td>${row.count}</td><td>${row.avgAll}</td>`;
+                    html += `<td>${formatMachineName(row.key)}</td><td>${row.count}</td><td>${row.avgAll}</td>`;
                     dates.forEach(d=>{
                         const recs = filtered.filter(r=>r['機種名']===row.key && r['日付']===d);
                         const avg = recs.length ? Math.round(recs.reduce((s,r)=>s+(r['差枚数']||0),0)/recs.length) : 0;
