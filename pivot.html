@@ -50,85 +50,100 @@
             <option value="機種名">機種</option>
         </select>
         <select id="dateSelect" class="btn btn-outline-secondary mb-3" multiple></select>
-        <button class="btn btn-success mb-3" onclick="displayPivotTable()">表示</button>
+        <button id="displayButton" class="btn btn-success mb-3" onclick="displayPivotTable()" disabled>表示</button>
     </div>
     <div id="pivotTable" class="ag-theme-alpine"></div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.noStyle.js"></script>
+    <script async src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script async src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    <script async src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.noStyle.min.js"></script>
 
     <script>
-        const loader = document.getElementById("loader");
-        const controls = document.getElementById("controls");
-        let originalData = [];
-        let gridOptions;
+        document.addEventListener("DOMContentLoaded", function () {
+            const loader = document.getElementById("loader");
+            const controls = document.getElementById("controls");
+            const displayButton = document.getElementById("displayButton");
+            let originalData = [];
+            let gridOptions;
 
-        document.getElementById('fileInput').addEventListener('change', (event) => {
-            const file = event.target.files[0];
-            const reader = new FileReader();
-            loader.style.display = "block";
-            controls.style.display = "none";
+            document.getElementById('fileInput').addEventListener('change', (event) => {
+                const file = event.target.files[0];
 
-            reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheet = workbook.SheetNames[0];
-                    originalData = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+                if (!file) {
+                    toastr.error("ファイルが選択されていません。");
+                    return;
+                }
 
-                    if (originalData.length === 0) {
-                        toastr.error("データが存在しません。");
+                const reader = new FileReader();
+                loader.style.display = "block";
+                controls.style.display = "none";
+                displayButton.disabled = true;
+
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const firstSheet = workbook.SheetNames[0];
+
+                        if (!firstSheet) {
+                            throw new Error("シートが見つかりませんでした。");
+                        }
+
+                        originalData = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+
+                        if (originalData.length === 0) {
+                            toastr.error("データが存在しません。");
+                            loader.style.display = "none";
+                            return;
+                        }
+
+                        originalData = originalData.filter(row => row["店舗名"] && row["日付"] && row["台番号"]);
+
+                        const stores = [...new Set(originalData.map(row => row["店舗名"]))];
+                        const dates = [...new Set(originalData.map(row => row["日付"]))].sort((a, b) => new Date(b) - new Date(a));
+
+                        document.getElementById('storeSelect').innerHTML = stores.map(store => `<option value="${store}">${store}</option>`).join('');
+                        document.getElementById('dateSelect').innerHTML = dates.map(date => `<option value="${date}">${date}</option>`).join('');
+
+                        controls.style.display = "block";
                         loader.style.display = "none";
-                        return;
+                        displayButton.disabled = false;
+                        toastr.success("データの読み込みに成功しました！");
+                    } catch (error) {
+                        console.error("ファイルの読み込みに失敗しました。", error);
+                        toastr.error("ファイルの読み込みに失敗しました。内容が不正か、ファイル形式が間違っています。");
+                        loader.style.display = "none";
                     }
+                };
+                reader.readAsArrayBuffer(file);
+            });
 
-                    originalData = originalData.filter(row => row["店舗名"] && row["日付"] && row["台番号"]);
+            window.displayPivotTable = function() {
+                const store = document.getElementById('storeSelect').value;
+                const selectedDates = Array.from(document.getElementById('dateSelect').selectedOptions).map(option => option.value);
 
-                    const stores = [...new Set(originalData.map(row => row["店舗名"]))];
-                    const dates = [...new Set(originalData.map(row => row["日付"]))].sort((a, b) => new Date(b) - new Date(a));
+                const filteredData = originalData.filter(row => row['店舗名'] === store && selectedDates.includes(row['日付']));
 
-                    document.getElementById('storeSelect').innerHTML = stores.map(store => `<option value="${store}">${store}</option>`).join('');
-                    document.getElementById('dateSelect').innerHTML = dates.map(date => `<option value="${date}">${date}</option>`).join('');
-
-                    controls.style.display = "block";
-                    loader.style.display = "none";
-                    toastr.success("データの読み込みに成功しました！");
-                } catch (error) {
-                    console.error("ファイルの読み込みに失敗しました。", error);
-                    toastr.error("ファイルの読み込みに失敗しました。内容が不正か、ファイル形式が間違っています。");
-                    loader.style.display = "none";
+                if (filteredData.length === 0) {
+                    toastr.error("該当するデータが存在しません。");
+                    return;
                 }
-            };
-            reader.readAsArrayBuffer(file);
-        });
 
-        function displayPivotTable() {
-            const store = document.getElementById('storeSelect').value;
-            const viewType = document.getElementById('viewType').value;
-            const selectedDates = Array.from(document.getElementById('dateSelect').selectedOptions).map(option => option.value);
+                gridOptions = {
+                    columnDefs: Object.keys(filteredData[0]).map(key => ({ headerName: key, field: key })),
+                    rowData: filteredData,
+                    defaultColDef: {
+                        sortable: true,
+                        filter: true,
+                        resizable: true,
+                    }
+                };
 
-            const filteredData = originalData.filter(row => row['店舗名'] === store && selectedDates.includes(row['日付']));
-
-            if (filteredData.length === 0) {
-                toastr.error("該当するデータが存在しません。");
-                return;
+                const gridDiv = document.querySelector('#pivotTable');
+                gridDiv.innerHTML = "";
+                new agGrid.Grid(gridDiv, gridOptions);
             }
-
-            gridOptions = {
-                columnDefs: Object.keys(filteredData[0]).map(key => ({ headerName: key, field: key })),
-                rowData: filteredData,
-                defaultColDef: {
-                    sortable: true,
-                    filter: true,
-                    resizable: true,
-                }
-            };
-
-            const gridDiv = document.querySelector('#pivotTable');
-            gridDiv.innerHTML = ""; // 初期化
-            new agGrid.Grid(gridDiv, gridOptions);
-        }
+        });
     </script>
 </body>
 </html>
