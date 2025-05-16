@@ -5,144 +5,157 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Excel Pivot Table Viewer</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        body {
-            background-color: #f8f9fa;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            flex-direction: column;
-        }
-        #pivotTable {
-            width: 100%;
-            height: 600px;
-            margin-top: 20px;
-        }
-        .loader {
-            display: none;
-            border: 4px solid #f3f3f3;
-            border-radius: 50%;
-            border-top: 4px solid #3498db;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        body { margin: 20px; font-family: Arial, sans-serif; }
+        #controls { display: none; margin-bottom: 20px; }
+        select, button, label { margin-right: 10px; margin-bottom: 10px; }
+        .table-container { overflow: auto; max-height: 80vh; position: relative; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; min-width: 100px; background: #fff; }
+        /* General header (date headers) */
+        th { background-color: #f0f0f0; position: sticky; top: 0; z-index: 3; }
+        /* Fixed columns header: 台番号, 機種名, 平均 */
+        th:nth-child(1), th:nth-child(2), th:nth-child(3) { z-index: 5; }
+        /* Fixed columns cells */
+        th:nth-child(1), td:nth-child(1) { position: sticky; left: 0; z-index: 2; }
+        th:nth-child(2), td:nth-child(2) { position: sticky; left: 100px; z-index: 2; }
+        th:nth-child(3), td:nth-child(3) { position: sticky; left: 200px; z-index: 2; }
     </style>
 </head>
 <body>
-
-    <input type="file" id="fileInput" accept=".xlsx, .xls" class="btn btn-primary mb-3">
-
-    <div class="loader" id="loader"></div>
-    <div id="controls" style="display: none;">
-        <select id="storeSelect" class="btn btn-outline-secondary mb-3"></select>
-        <select id="viewType" class="btn btn-outline-secondary mb-3">
+    <label class="btn btn-primary">
+        <input type="file" id="fileInput" accept=".xlsx,.xls" hidden> Excelを選択
+    </label>
+    <div id="controls">
+        <select id="storeSelect" class="form-select d-inline-block" style="width:auto;"></select>
+        <select id="typeSelect" class="form-select d-inline-block" style="width:auto;">
             <option value="台番号">台</option>
             <option value="機種名">機種</option>
         </select>
-        <select id="dateSelect" class="btn btn-outline-secondary mb-3" multiple></select>
-        <button id="displayButton" class="btn btn-success mb-3" onclick="displayPivotTable()" disabled>表示</button>
+        <select id="dateSelect" multiple class="form-select d-inline-block" style="width:auto;"></select>
+        <button id="display" class="btn btn-success">表示</button>
     </div>
-    <div id="pivotTable" class="ag-theme-alpine"></div>
-
-    <script async src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script async src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
-    <script async src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.noStyle.min.js"></script>
+    <div id="tableContainer"></div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const loader = document.getElementById("loader");
-            const controls = document.getElementById("controls");
-            const displayButton = document.getElementById("displayButton");
-            let originalData = [];
-            let gridOptions;
+        let originalData = [];
+        const fileInput = document.getElementById('fileInput');
+        const controls = document.getElementById('controls');
+        const storeSelect = document.getElementById('storeSelect');
+        const typeSelect = document.getElementById('typeSelect');
+        const dateSelect = document.getElementById('dateSelect');
+        const displayBtn = document.getElementById('display');
+        const tableContainer = document.getElementById('tableContainer');
 
-            document.getElementById('fileInput').addEventListener('change', (event) => {
-                const file = event.target.files[0];
+        function formatDate(d) {
+            const date = new Date(d);
+            if (isNaN(date)) return d;
+            const mm = String(date.getMonth()+1).padStart(2,'0');
+            const dd = String(date.getDate()).padStart(2,'0');
+            const days = ['日','月','火','水','木','金','土'];
+            return `${mm}/${dd}(${days[date.getDay()]})`;
+        }
 
-                if (!file) {
-                    toastr.error("ファイルが選択されていません。");
-                    return;
-                }
+        fileInput.addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = evt => {
+                const data = new Uint8Array(evt.target.result);
+                const wb = XLSX.read(data, { type: 'array' });
+                const sheet = wb.SheetNames[0];
+                originalData = XLSX.utils.sheet_to_json(wb.Sheets[sheet]);
+                if (!originalData.length) { alert('データがありません'); return; }
+                const stores = [...new Set(originalData.map(r=>r['店舗名']))];
+                const dates = [...new Set(originalData.map(r=>r['日付']))].sort((a,b)=>new Date(b)-new Date(a));
+                storeSelect.innerHTML = stores.map(s=>`<option>${s}</option>`).join('');
+                dateSelect.innerHTML = dates.map(d=>`<option value="${d}">${formatDate(d)}</option>`).join('');
+                controls.style.display = 'block';
+            };
+            reader.readAsArrayBuffer(file);
+        });
 
-                const reader = new FileReader();
-                loader.style.display = "block";
-                controls.style.display = "none";
-                displayButton.disabled = true;
+        displayBtn.addEventListener('click', () => {
+            const store = storeSelect.value;
+            const typeKey = typeSelect.value;
+            const dates = Array.from(dateSelect.selectedOptions).map(o=>o.value);
+            const filtered = originalData.filter(r=>r['店舗名']===store && dates.includes(r['日付']));
 
-                reader.onload = function(e) {
-                    try {
-                        const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        const firstSheet = workbook.SheetNames[0];
-
-                        if (!firstSheet) {
-                            throw new Error("シートが見つかりませんでした。");
-                        }
-
-                        originalData = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
-
-                        if (originalData.length === 0) {
-                            toastr.error("データが存在しません。");
-                            loader.style.display = "none";
-                            return;
-                        }
-
-                        originalData = originalData.filter(row => row["店舗名"] && row["日付"] && row["台番号"]);
-
-                        const stores = [...new Set(originalData.map(row => row["店舗名"]))];
-                        const dates = [...new Set(originalData.map(row => row["日付"]))].sort((a, b) => new Date(b) - new Date(a));
-
-                        document.getElementById('storeSelect').innerHTML = stores.map(store => `<option value="${store}">${store}</option>`).join('');
-                        document.getElementById('dateSelect').innerHTML = dates.map(date => `<option value="${date}">${date}</option>`).join('');
-
-                        controls.style.display = "block";
-                        loader.style.display = "none";
-                        displayButton.disabled = false;
-                        toastr.success("データの読み込みに成功しました！");
-                    } catch (error) {
-                        console.error("ファイルの読み込みに失敗しました。", error);
-                        toastr.error("ファイルの読み込みに失敗しました。内容が不正か、ファイル形式が間違っています。");
-                        loader.style.display = "none";
-                    }
-                };
-                reader.readAsArrayBuffer(file);
-            });
-
-            window.displayPivotTable = function() {
-                const store = document.getElementById('storeSelect').value;
-                const selectedDates = Array.from(document.getElementById('dateSelect').selectedOptions).map(option => option.value);
-
-                const filteredData = originalData.filter(row => row['店舗名'] === store && selectedDates.includes(row['日付']));
-
-                if (filteredData.length === 0) {
-                    toastr.error("該当するデータが存在しません。");
-                    return;
-                }
-
-                gridOptions = {
-                    columnDefs: Object.keys(filteredData[0]).map(key => ({ headerName: key, field: key })),
-                    rowData: filteredData,
-                    defaultColDef: {
-                        sortable: true,
-                        filter: true,
-                        resizable: true,
-                    }
-                };
-
-                const gridDiv = document.querySelector('#pivotTable');
-                gridDiv.innerHTML = "";
-                new agGrid.Grid(gridDiv, gridOptions);
+            let rows = [];
+            if (typeKey === '台番号') {
+                const keys = [...new Set(filtered.map(r=>r['台番号']))];
+                rows = keys.map(key => ({ key, values: {}, machine: '', avg: 0 }));
+                rows.forEach(row => {
+                    const recs = filtered.filter(r=>r['台番号']===row.key);
+                    row.machine = recs[0] ? recs[0]['機種名'] : '';
+                    let total = 0;
+                    dates.forEach(d => {
+                        const sum = recs.filter(r=>r['日付']===d).reduce((s,r)=>s+(r['差枚数']||0),0);
+                        row.values[d] = sum;
+                        total += sum;
+                    });
+                    row.avg = dates.length ? Math.round(total / dates.length) : 0;
+                });
+            } else {
+                const keys = [...new Set(filtered.map(r=>r['機種名']))];
+                rows = keys.map(key => {
+                    const recs = filtered.filter(r=>r['機種名']===key);
+                    const count = recs.length;
+                    const sumAll = recs.reduce((s,r)=>s+(r['差枚数']||0),0);
+                    const avgAll = count ? Math.round(sumAll/count) : 0;
+                    return { key, count, avgAll };
+                });
+                rows.sort((a,b)=>b.avgAll - a.avgAll);
             }
+
+            let html = '<table><tr>';
+            if (typeKey==='台番号') {
+                html += '<th>台番号</th><th>機種名</th><th>平均</th>';
+            } else {
+                html += '<th>機種名</th><th>台数</th><th>平均</th>';
+            }
+            html += dates.map(d=>`<th>${formatDate(d)}</th>`).join('') + '</tr>';
+
+            rows.forEach(row => {
+                html += '<tr>';
+                if (typeKey==='台番号') {
+                    // 平均色付け
+                    let styleAvg = '';
+                    const avg = row.avg;
+                    if (avg>0&&avg<=1000) styleAvg='background:#ffffcc';
+                    else if (avg>=1001&&avg<=2000) styleAvg='background:orange';
+                    else if (avg>=2001&&avg<=3000) styleAvg='background:red';
+                    else if (avg>=3001) styleAvg='background:purple';
+                    html += `<td>${row.key}</td><td>${row.machine}</td><td${styleAvg?` style="${styleAvg}"`:``}>${avg}</td>`;
+                    dates.forEach(d=>{
+                        const sum = row.values[d] || 0;
+                        let style='';
+                        if(sum>0&&sum<=1000) style='background:#ffffcc';
+                        else if(sum>=1001&&sum<=2000) style='background:orange';
+                        else if(sum>=2001&&sum<=3000) style='background:red';
+                        else if(sum>=3001) style='background:purple';
+                        const displaySum = (sum === 0 ? '0' : sum);
+                        html += `<td${style?` style="${style}"`:``}>${displaySum}</td>`;
+                    });
+                } else {
+                    html += `<td>${row.key}</td><td>${row.count}</td><td>${row.avgAll}</td>`;
+                    dates.forEach(d=>{
+                        const recs = filtered.filter(r=>r['機種名']===row.key && r['日付']===d);
+                        const avg = recs.length ? Math.round(recs.reduce((s,r)=>s+(r['差枚数']||0),0)/recs.length) : 0;
+                        let style='';
+                        if(avg>0&&avg<=1000) style='background:#ffffcc';
+                        else if(avg>=1001&&avg<=2000) style='background:orange';
+                        else if(avg>=2001&&avg<=3000) style='background:red';
+                        else if(avg>=3001) style='background:purple';
+                        const displayAvg = (avg === 0 ? '0' : avg);
+                        html += `<td${style?` style="${style}"`:``}>${displayAvg}</td>`;
+                    });
+                }
+                html += '</tr>';
+            });
+            html += '</table>';
+            tableContainer.innerHTML = `<div class="table-container">${html}</div>`;
         });
     </script>
 </body>
