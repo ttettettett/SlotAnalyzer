@@ -11,16 +11,15 @@
         #controls { display: none; margin-bottom: 20px; }
         select, button, label { margin-right: 10px; margin-bottom: 10px; }
         .table-container { overflow: auto; max-height: 80vh; position: relative; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; min-width: 100px; background: #fff; }
-        /* General header (date headers) */
-        th { background-color: #f0f0f0; position: sticky; top: 0; z-index: 3; }
-        /* Fixed columns header: 台番号, 機種名, 平均 */
-        th:nth-child(1), th:nth-child(2), th:nth-child(3) { z-index: 5; }
-        /* Fixed columns cells */
-        th:nth-child(1), td:nth-child(1) { position: sticky; left: 0; z-index: 2; }
-        th:nth-child(2), td:nth-child(2) { position: sticky; left: 100px; z-index: 2; }
-        th:nth-child(3), td:nth-child(3) { position: sticky; left: 200px; z-index: 2; }
+        table { border-collapse: collapse; width: max-content; }
+        th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: center; background: #fff; white-space: nowrap; box-sizing: border-box; }
+        th:nth-child(n+4) { position: sticky; top: 0; background-color: #f0f0f0; z-index: 3; }
+        th:nth-child(1) { position: sticky; top: 0; left: 0; background-color: #f0f0f0; z-index: 5; width:50px; }
+        th:nth-child(2) { position: sticky; top: 0; left: 50px; background-color: #f0f0f0; z-index: 5; width:80px; }
+        th:nth-child(3) { position: sticky; top: 0; left: 130px; background-color: #f0f0f0; z-index: 5; width:60px; }
+        td:nth-child(1) { position: sticky; left: 0; z-index: 4; width:50px; }
+        td:nth-child(2) { position: sticky; left: 50px; z-index: 4; width:80px; }
+        td:nth-child(3) { position: sticky; left: 130px; z-index:4; width:60px; }
     </style>
 </head>
 <body>
@@ -110,17 +109,12 @@
             }
 
             let html = '<table><tr>';
-            if (typeKey==='台番号') {
-                html += '<th>台番号</th><th>機種名</th><th>平均</th>';
-            } else {
-                html += '<th>機種名</th><th>台数</th><th>平均</th>';
-            }
+            if (typeKey==='台番号') html += '<th>台番号</th><th>機種名</th><th>平均</th>'; else html += '<th>機種名</th><th>台数</th><th>平均</th>';
             html += dates.map(d=>`<th>${formatDate(d)}</th>`).join('') + '</tr>';
 
             rows.forEach(row => {
                 html += '<tr>';
                 if (typeKey==='台番号') {
-                    // 平均色付け
                     let styleAvg = '';
                     const avg = row.avg;
                     if (avg>0&&avg<=1000) styleAvg='background:#ffffcc';
@@ -156,6 +150,19 @@
             });
             html += '</table>';
             tableContainer.innerHTML = `<div class="table-container">${html}</div>`;
+            const tableElem = tableContainer.querySelector('table');
+            const tableRows = tableElem.querySelectorAll('tr');
+            tableRows.forEach((tr, rowIndex) => {
+                const cells = tr.children;
+                for (let i = 0; i < 3; i++) {
+                    const cell = cells[i];
+                    const left = cell.offsetLeft;
+                    cell.style.position = 'sticky';
+                    cell.style.left = left + 'px';
+                    cell.style.zIndex = rowIndex === 0 ? 5 : 4;
+                    cell.style.backgroundColor = rowIndex === 0 ? '#f0f0f0' : '#fff';
+                }
+            });
         });
     </script>
 </body>
