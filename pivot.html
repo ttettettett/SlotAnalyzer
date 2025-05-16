@@ -95,9 +95,9 @@
                     loader.style.display = "none";
                     toastr.success("データの読み込みに成功しました！");
                 } catch (error) {
-                    toastr.error("ファイルの読み込みに失敗しました。");
+                    console.error("ファイルの読み込みに失敗しました。", error);
+                    toastr.error("ファイルの読み込みに失敗しました。内容が不正か、ファイル形式が間違っています。");
                     loader.style.display = "none";
-                    console.error(error);
                 }
             };
             reader.readAsArrayBuffer(file);
