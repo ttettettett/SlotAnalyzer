@@ -123,7 +123,9 @@
             let html='<table><tr>';
             if(typeKey==='台番号') html+='<th>台</th><th>機種名</th><th>平均</th>';
             else html+='<th>機種名</th><th>台数</th><th>平均</th>';
-            html+=dates.map(d=>`<th>${formatDate(d)}</th>`).join('')+'</tr>';
+            // ヘッダーを選択オプションの表示テキストで生成
+            const selectedOpts = Array.from(dateSelect.selectedOptions);
+            html += selectedOpts.map(o => `<th>${o.textContent}</th>`).join('') +'</tr>';
 
             rows.forEach(row=>{
                 html+='<tr>';
