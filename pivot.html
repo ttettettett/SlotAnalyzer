@@ -68,6 +68,7 @@
                 const sheet = wb.SheetNames[0];
                 originalData = XLSX.utils.sheet_to_json(wb.Sheets[sheet]);
                 if (!originalData.length) { alert('データがありません'); return; }
+                
                 originalData.forEach(r => {
                     r._rawDate = r['日付'];
                     r._displayDate = formatDate(r['日付']);
@@ -75,8 +76,11 @@
                 const stores = [...new Set(originalData.map(r=>r['店舗名']))];
                 const rawDates = [...new Set(originalData.map(r=>r._rawDate))]
                     .sort((a,b)=>new Date(b)-new Date(a));
+
                 storeSelect.innerHTML = stores.map(s=>`<option>${s}</option>`).join('');
-                dateSelect.innerHTML = rawDates.map(d=>`<option data-raw="${d}" value="${formatDate(d)}">${formatDate(d)}</option>`).join('');
+                dateSelect.innerHTML = rawDates
+                    .map(d=>`<option data-raw="${d}" data-display="${formatDate(d)}" value="${d}">${formatDate(d)}</option>`)
+                    .join('');
                 controls.style.display = 'block';
             };
             reader.readAsArrayBuffer(file);
@@ -120,15 +124,14 @@
                 rows.sort((a,b)=>b.avgAll - a.avgAll);
             }
 
-            let html='<table><tr>';
+            let html = '<table><tr>';
             if(typeKey==='台番号') html+='<th>台</th><th>機種名</th><th>平均</th>';
             else html+='<th>機種名</th><th>台数</th><th>平均</th>';
-            // ヘッダーを選択オプションの表示テキストで生成
             const selectedOpts = Array.from(dateSelect.selectedOptions);
-            html += selectedOpts.map(o => `<th>${o.textContent}</th>`).join('') +'</tr>';
+            html += selectedOpts.map(o => `<th>${o.dataset.display}</th>`).join('') + '</tr>';
 
-            rows.forEach(row=>{
-                html+='<tr>';
+            rows.forEach(row => {
+                html += '<tr>';
                 if(typeKey==='台番号'){
                     const avg=row.avg;
                     let styleAvg='';
