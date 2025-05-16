@@ -124,11 +124,18 @@
                 rows.sort((a,b)=>b.avgAll - a.avgAll);
             }
 
-            let html = '<table><tr>';
-            if(typeKey==='台番号') html+='<th>台</th><th>機種名</th><th>平均</th>';
-            else html+='<th>機種名</th><th>台数</th><th>平均</th>';
+            let html = '<table><thead><tr>';
+            // 列ヘッダー（固定列）
+            if (typeKey==='台番号') html += '<th>台</th><th>機種名</th><th>平均</th>';
+            else html += '<th>機種名</th><th>台数</th><th>平均</th>';
+            // 日付ヘッダー（表示用ラベルのみ）
             const selectedOpts = Array.from(dateSelect.selectedOptions);
-            html += selectedOpts.map(o => `<th>${o.dataset.display}</th>`).join('') + '</tr>';
+            // ソート: 日付生データで降順
+            selectedOpts.sort((a,b)=> new Date(b.dataset.raw) - new Date(a.dataset.raw));
+            selectedOpts.forEach(opt => {
+                html += `<th>${opt.dataset.display}</th>`;
+            });
+            html += '</tr></thead><tbody>';
 
             rows.forEach(row => {
                 html += '<tr>';
