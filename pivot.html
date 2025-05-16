@@ -76,7 +76,7 @@
                 const rawDates = [...new Set(originalData.map(r=>r._rawDate))]
                     .sort((a,b)=>new Date(b)-new Date(a));
                 storeSelect.innerHTML = stores.map(s=>`<option>${s}</option>`).join('');
-                dateSelect.innerHTML = rawDates.map(d=>`<option value="${d}">${formatDate(d)}</option>`).join('');
+                dateSelect.innerHTML = rawDates.map(d=>`<option data-raw="${d}" value="${formatDate(d)}">${formatDate(d)}</option>`).join('');
                 controls.style.display = 'block';
             };
             reader.readAsArrayBuffer(file);
@@ -85,7 +85,7 @@
         displayBtn.addEventListener('click', () => {
             const store = storeSelect.value;
             const typeKey = typeSelect.value;
-            const dates = Array.from(dateSelect.selectedOptions).map(o=>o.value);
+            const dates = Array.from(dateSelect.selectedOptions).map(o=>o.dataset.raw);
             const filtered = originalData.filter(r=>r['店舗名']===store && dates.includes(r._rawDate));
 
             let rows = [];
